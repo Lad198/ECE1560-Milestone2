@@ -44,8 +44,8 @@ ClipAlpha = 0.6;        % 0..1 aggressiveness if DoClip = true
 
 % 1) Light preprocess (keeps ACF cleaner)
 x = x - mean(x);                             % remove DC
-w = ones(N,1);              % rectangular window (no taper)
-xw = x .* w;                % unchanged
+w = ones(N,1);                               % rectangular window (no taper)
+xw = x .* w;                                 % unchanged
 
 if DoClip
     % Optional experiment: center clipping emphasizes periodic fine structure
@@ -78,19 +78,24 @@ kmax = min(numel(r)-1, ceil(fs / F0Range(1)));
 seg = r(kmin:kmax);
 tau = (kmin:kmax) / fs;                      % seconds for those lags
 
-% Find local peaks inside the candidate region (for inspection only)
-isPk = islocalmax(seg, 'MinProminence', MinProm);
-pk_idx_local = find(isPk);
-pk_tau  = tau(isPk);                         % seconds to first few peaks
-pk_vals = seg(isPk);
+% --- Find local peaks inside the candidate region (now using findpeaks) ---
+minPeakDist = max(1, floor(fs / (1.25*F0Range(2))));  % ~80% of smallest expected period
+
+[pk_vals, pk_locs] = findpeaks(seg, ...
+    'MinPeakProminence', MinProm, ...
+    'MinPeakDistance',   minPeakDist);
+
+pk_idx_local = pk_locs(:);                % indices within 'seg'
+pk_tau       = tau(pk_idx_local);         % seconds
 
 % Rough observed spacing between successive peaks (useful sanity check)
 if numel(pk_tau) >= 3
-    dT = diff(pk_tau);
+    dT     = diff(pk_tau);
     T0_obs = median(dT);
     f0_obs = 1 / T0_obs;
 else
-    T0_obs = NaN; f0_obs = NaN;
+    T0_obs = NaN; 
+    f0_obs = NaN;
 end
 
 % ---- Print observations you can cite in your write-up ----
@@ -98,7 +103,7 @@ fprintf('\n--- ACF exploration for: %s%s ---\n', wavFile, channelInfo);
 fprintf('Fs = %d Hz, N = %d (%.2f s). ACF normalized: R(0)=1.\n', fs, N, N/fs);
 fprintf('Search window: k=[%d..%d] -> tau=[%.5f..%.5f] s (f0≈[%d..%d] Hz)\n', ...
         kmin, kmax, kmin/fs, kmax/fs, F0Range(1), F0Range(2));
-fprintf('Found %d local peaks in window.\n', numel(pk_tau));
+fprintf('Found %d peaks in window.\n', numel(pk_tau));
 if ~isnan(f0_obs)
     fprintf('Observed inter-peak spacing T0≈%.5f s -> f0≈%.2f Hz (exploratory)\n', T0_obs, f0_obs);
 end
